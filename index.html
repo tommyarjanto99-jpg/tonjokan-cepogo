@@ -1,1 +1,154 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ceklis Pembagian Hadiah Masal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 md:p-8">
 
+  <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-md p-6">
+    <h1 class="text-2xl font-bold text-gray-800 text-center mb-6">🎁 Monitoring Pembagian Hadiah</h1>
+
+    <!-- Filter Desa & RT -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Pilih Desa</label>
+        <select id="selectDesa" onchange="filterData()" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+          <option value="">-- Semua Desa --</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Pilih RT</label>
+        <select id="selectRT" onchange="filterData()" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+          <option value="">-- Semua RT --</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Indicator Loading -->
+    <div id="loading" class="text-center py-4 text-gray-500 font-semibold">Memuat Data Database...</div>
+
+    <!-- Daftar Penerima -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="bg-gray-200">
+            <th class="p-3">Nama Penerima</th>
+            <th class="p-3">Desa</th>
+            <th class="p-3">RT</th>
+            <th class="p-3 text-center">Status Aksi</th>
+          </tr>
+        </thead>
+        <tbody id="penerimaTableBody">
+          <!-- Data diisi oleh JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // GANTI DENGAN URL WEB APP GOOGLE APPS SCRIPT ANDA
+    const API_URL = "https://script.google.com/macros/s/AKfycbx.../exec"; 
+    
+    let dbData = [];
+
+    async function loadData() {
+      document.getElementById('loading').classList.remove('hidden');
+      try {
+        const response = await fetch(API_URL);
+        dbData = await response.json();
+        
+        populateDropdowns();
+        filterData();
+      } catch (err) {
+        alert("Gagal memuat data dari Spreadsheet");
+      } finally {
+        document.getElementById('loading').classList.add('hidden');
+      }
+    }
+
+    function populateDropdowns() {
+      const desaSelect = document.getElementById('selectDesa');
+      const rtSelect = document.getElementById('selectRT');
+
+      const desaList = [...new Set(dbData.map(item => item.desa))];
+      const rtList = [...new Set(dbData.map(item => item.rt))];
+
+      desaSelect.innerHTML = '<option value="">-- Semua Desa --</option>';
+      rtSelect.innerHTML = '<option value="">-- Semua RT --</option>';
+
+      desaList.forEach(d => desaSelect.innerHTML += `<option value="${d}">${d}</option>`);
+      rtList.forEach(r => rtSelect.innerHTML += `<option value="${r}">${r}</option>`);
+    }
+
+    function filterData() {
+      const selectedDesa = document.getElementById('selectDesa').value;
+      const selectedRT = document.getElementById('selectRT').value;
+
+      const filtered = dbData.filter(item => {
+        return (selectedDesa === "" || item.desa == selectedDesa) &&
+               (selectedRT === "" || item.rt == selectedRT);
+      });
+
+      renderTable(filtered);
+    }
+
+    function renderTable(data) {
+      const tbody = document.getElementById('penerimaTableBody');
+      tbody.innerHTML = "";
+
+      if(data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">Data tidak ditemukan.</td></tr>`;
+        return;
+      }
+
+      data.forEach(item => {
+        const isChecked = item.status === "Sudah";
+        tbody.innerHTML += `
+          <tr class="border-b hover:bg-gray-50">
+            <td class="p-3 font-semibold">${item.nama}</td>
+            <td class="p-3">${item.desa}</td>
+            <td class="p-3">${item.rt}</td>
+            <td class="p-3 text-center">
+              <label class="inline-flex items-center cursor-pointer">
+                <input type="checkbox" ${isChecked ? "checked" : ""} 
+                       onchange="updateStatus(${item.id}, this.checked)"
+                       class="w-5 h-5 text-green-600 rounded focus:ring-green-500">
+                <span class="ml-2 text-sm ${isChecked ? 'text-green-600 font-bold' : 'text-gray-500'}">
+                  ${isChecked ? 'Sudah Diserahkan' : 'Belum'}
+                </span>
+              </label>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    async function updateStatus(id, checked) {
+      const newStatus = checked ? "Sudah" : "Belum";
+      
+      // Update tampilan lokal secara responsif
+      const index = dbData.findIndex(item => item.id == id);
+      if(index !== -1) dbData[index].status = newStatus;
+      filterData();
+
+      // Kirim pembaruan ke Google Spreadsheet
+      try {
+        await fetch(API_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: id, status: newStatus })
+        });
+      } catch (err) {
+        alert("Gagal memperbarui status ke server!");
+      }
+    }
+
+    // Muat data saat halaman dibuka
+    loadData();
+  </script>
+</body>
+</html>
